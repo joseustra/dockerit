@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -14,8 +16,13 @@ import (
 	"github.com/codegangsta/cli"
 )
 
-// A Config is the configuration for the app
+// A Config is the configuration for the container
 type Config struct {
+	Container Container
+}
+
+// A Container is the configuration for the app
+type Container struct {
 	Name   string
 	Port   string
 	Link   string
@@ -23,20 +30,21 @@ type Config struct {
 	Image  string
 }
 
-func loadConfig() (config *Config, pwd string) {
+func loadConfig() (container *Container, pwd string) {
 	pwd, _ = os.Getwd()
 	dir := strings.Split(pwd, "/")
 	appName := dir[len(dir)-1]
 
 	data, _ := ioutil.ReadFile(os.Getenv("HOME") + "/.gozek/" + appName + ".yml")
-	config = new(Config)
+	config := new(Config)
 
 	err := yaml.Unmarshal(data, &config)
 	if err != nil {
 		log.Fatalf("error: %v", err)
 	}
+	container = &config.Container
 
-	return config, pwd
+	return container, pwd
 }
 
 func execCommand(cmd *exec.Cmd) error {
@@ -53,18 +61,45 @@ func execCommand(cmd *exec.Cmd) error {
 		}
 	}()
 
+	var stderr bytes.Buffer
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = &stderr
+
 	err = cmd.Start()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error starting Cmd", err)
+		fmt.Printf("docker build out | %s\n", stderr.String())
 		return err
 	}
 
 	err = cmd.Wait()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error waiting for Cmd", err)
+		fmt.Printf("docker build out | %s\n", stderr.String())
 		return err
 	}
 	return err
+}
+
+func cleanContainer(name string) {
+	cmdName := "docker"
+
+	cmdArgs := []string{"ps", "-a", "-f", "name=" + name}
+	cmd := exec.Command(cmdName, cmdArgs...)
+	out, err := cmd.Output()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error to exec Command", err)
+		os.Exit(1)
+	}
+
+	r := regexp.MustCompile(name)
+	if r.Match([]byte(string(out))) {
+		cmdArgs = []string{"rm", "-f", name}
+		cmd = exec.Command(cmdName, cmdArgs...)
+		err = execCommand(cmd)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error to exec Command", err)
+			os.Exit(1)
+		}
+	}
 }
 
 func main() {
@@ -78,10 +113,10 @@ func main() {
 			Aliases: []string{"b"},
 			Usage:   "build an image",
 			Action: func(c *cli.Context) {
-				config, _ := loadConfig()
+				container, _ := loadConfig()
 
 				cmdName := "docker"
-				cmdArgs := []string{"build", "-t", config.Image, "."}
+				cmdArgs := []string{"build", "-t", container.Image, "."}
 
 				cmd := exec.Command(cmdName, cmdArgs...)
 				err := execCommand(cmd)
@@ -96,11 +131,11 @@ func main() {
 			Aliases: []string{"up"},
 			Usage:   "up a container",
 			Action: func(c *cli.Context) {
-				config, pwd := loadConfig()
+				container, pwd := loadConfig()
+				cleanContainer(container.Name)
 
 				cmdName := "docker"
-				cmdArgs := []string{"run", "--name", config.Name, "-a", "stdout", "-a", "stderr", "-it", "-p", config.Port, "--link",
-					config.Link, "-v", pwd + ":/go/src/app", config.Image}
+				cmdArgs := []string{"run", "--name", container.Name, "-a", "stdout", "-a", "stderr", "-p", container.Port, "--link", container.Link, "-v", pwd + ":/go/src/app", container.Image}
 
 				cmd := exec.Command(cmdName, cmdArgs...)
 				err := execCommand(cmd)
@@ -115,11 +150,11 @@ func main() {
 			Aliases: []string{"run"},
 			Usage:   "run an command on the container",
 			Action: func(c *cli.Context) {
-				config, pwd := loadConfig()
+				container, pwd := loadConfig()
+				cleanContainer(container.Name)
 
 				cmdName := "docker"
-				cmdArgs := []string{"run", "--name", config.Name, "-a", "stdout", "-a", "stderr", "-i", "-t", "-p", config.Port, "--link",
-					config.Link, "-v", pwd + ":/go/src/app", config.Image}
+				cmdArgs := []string{"run", "--name", container.Name, "-a", "stdout", "-a", "stderr", "-p", container.Port, "--link", container.Link, "-v", pwd + ":/go/src/app", container.Image}
 
 				for _, arg := range c.Args() {
 					cmdArgs = append(cmdArgs, arg)
