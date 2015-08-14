@@ -12,17 +12,15 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/codegangsta/cli"
-	"github.com/codeskyblue/go-sh"
 )
 
 // A Config is the configuration for the app
 type Config struct {
-	Name    string
-	Port    string
-	Link    string
-	Image   string
-	Volume  string
-	Command string
+	Name   string
+	Port   string
+	Link   string
+	Volume string
+	Image  string
 }
 
 func loadConfig() (config *Config, pwd string) {
@@ -41,20 +39,32 @@ func loadConfig() (config *Config, pwd string) {
 	return config, pwd
 }
 
-func pipeCommands(commands ...*exec.Cmd) []byte {
-	for i, command := range commands[:len(commands)-1] {
-		out, err := command.StdoutPipe()
-		if err != nil {
-			return nil
-		}
-		command.Start()
-		commands[i+1].Stdin = out
-	}
-	final, err := commands[len(commands)-1].Output()
+func execCommand(cmd *exec.Cmd) error {
+	cmdReader, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil
+		fmt.Fprintln(os.Stderr, "Error creating StdoutPipe for Cmd", err)
+		return err
 	}
-	return final
+
+	scanner := bufio.NewScanner(cmdReader)
+	go func() {
+		for scanner.Scan() {
+			fmt.Printf("docker build out | %s\n", scanner.Text())
+		}
+	}()
+
+	err = cmd.Start()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error starting Cmd", err)
+		return err
+	}
+
+	err = cmd.Wait()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error waiting for Cmd", err)
+		return err
+	}
+	return err
 }
 
 func main() {
@@ -74,43 +84,52 @@ func main() {
 				cmdArgs := []string{"build", "-t", config.Image, "."}
 
 				cmd := exec.Command(cmdName, cmdArgs...)
-				cmdReader, err := cmd.StdoutPipe()
+				err := execCommand(cmd)
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error creating StdoutPipe for Cmd", err)
+					fmt.Fprintln(os.Stderr, "Error to exec Command", err)
 					os.Exit(1)
 				}
+			},
+		},
+		{
+			Name:    "up",
+			Aliases: []string{"up"},
+			Usage:   "up a container",
+			Action: func(c *cli.Context) {
+				config, pwd := loadConfig()
 
-				scanner := bufio.NewScanner(cmdReader)
-				go func() {
-					for scanner.Scan() {
-						fmt.Printf("docker build out | %s\n", scanner.Text())
-					}
-				}()
+				cmdName := "docker"
+				cmdArgs := []string{"run", "--name", config.Name, "-a", "stdout", "-a", "stderr", "-it", "-p", config.Port, "--link",
+					config.Link, "-v", pwd + ":/go/src/app", config.Image}
 
-				err = cmd.Start()
+				cmd := exec.Command(cmdName, cmdArgs...)
+				err := execCommand(cmd)
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error starting Cmd", err)
-					os.Exit(1)
-				}
-
-				err = cmd.Wait()
-				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error waiting for Cmd", err)
+					fmt.Fprintln(os.Stderr, "Error to exec Command", err)
 					os.Exit(1)
 				}
 			},
 		},
 		{
 			Name:    "run",
-			Aliases: []string{"r"},
-			Usage:   "run an image",
+			Aliases: []string{"run"},
+			Usage:   "run an command on the container",
 			Action: func(c *cli.Context) {
 				config, pwd := loadConfig()
 
-				err := sh.Command("docker", "run", "--name", config.Name, "-a", "stdout", "-a", "stderr", "-i", "-t", "-p", config.Port, "--link",
-					config.Link, "-v", pwd+":/go/src/"+config.Name, config.Image, config.Command).Run()
+				cmdName := "docker"
+				cmdArgs := []string{"run", "--name", config.Name, "-a", "stdout", "-a", "stderr", "-i", "-t", "-p", config.Port, "--link",
+					config.Link, "-v", pwd + ":/go/src/app", config.Image}
+
+				for _, arg := range c.Args() {
+					cmdArgs = append(cmdArgs, arg)
+				}
+
+				cmd := exec.Command(cmdName, cmdArgs...)
+				err := execCommand(cmd)
 				if err != nil {
-					log.Fatal(err)
+					fmt.Fprintln(os.Stderr, "Error to exec Command", err)
+					os.Exit(1)
 				}
 			},
 		},
