@@ -35,7 +35,7 @@ func loadConfig() (container *Container, pwd string) {
 	dir := strings.Split(pwd, "/")
 	appName := dir[len(dir)-1]
 
-	data, _ := ioutil.ReadFile(os.Getenv("HOME") + "/.gozek/" + appName + ".yml")
+	data, _ := ioutil.ReadFile(os.Getenv("HOME") + "/.dockerit/" + appName + ".yml")
 	config := new(Config)
 
 	err := yaml.Unmarshal(data, &config)
@@ -104,7 +104,7 @@ func cleanContainer(name string) {
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "Gozek"
+	app.Name = "dockerit"
 	app.Usage = "Run Docker commands easily"
 
 	app.Commands = []cli.Command{

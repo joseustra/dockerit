@@ -1,10 +1,12 @@
-# Gozek
+# Dockerit
 
 ## A tool to execute docker containers easily from config file
 
 Run docker containers using a simple config file. Very similar to docker-compose
 
 ## Config file example
+
+The config file should be on: ***~/.dockerit/folder_name.yml***
 
 ```yaml
 container:
@@ -22,7 +24,7 @@ The project is in a very early stage, so is not ready to be used yet.
 
 Get the code
 ```
-go get -u github.com/ustrajunior/gozek
+go get -u github.com/ustrajunior/dockerit
 ```
 
 ## Documentation
@@ -36,4 +38,4 @@ TODO
 
 ## License
 
-Released under the [MIT License](https://github.com/ustrajunior/gozek/blob/master/LICENSE).
+Released under the [MIT License](https://github.com/ustrajunior/dockerit/blob/master/LICENSE).
