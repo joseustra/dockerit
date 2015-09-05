@@ -102,6 +102,19 @@ func cleanContainer(name string) {
 	}
 }
 
+func prepareRunArgs(container *Container, pwd string) []string {
+	cmdArgs := []string{"run", "--name", container.Name, "-a", "stdout", "-a", "stderr", "-v", pwd + ":/go/src/app"}
+	if len(container.Port) > 0 {
+		cmdArgs = append(cmdArgs, "-p", container.Port)
+	}
+
+	if len(container.Link) > 0 {
+		cmdArgs = append(cmdArgs, "--link", container.Link)
+	}
+	cmdArgs = append(cmdArgs, container.Image)
+	return cmdArgs
+}
+
 func main() {
 	app := cli.NewApp()
 	app.Name = "dockerit"
@@ -135,7 +148,7 @@ func main() {
 				cleanContainer(container.Name)
 
 				cmdName := "docker"
-				cmdArgs := []string{"run", "--name", container.Name, "-a", "stdout", "-a", "stderr", "-p", container.Port, "--link", container.Link, "-v", pwd + ":/go/src/app", container.Image}
+				cmdArgs := prepareRunArgs(container, pwd)
 
 				cmd := exec.Command(cmdName, cmdArgs...)
 				err := execCommand(cmd)
@@ -154,7 +167,7 @@ func main() {
 				cleanContainer(container.Name)
 
 				cmdName := "docker"
-				cmdArgs := []string{"run", "--name", container.Name, "-a", "stdout", "-a", "stderr", "-p", container.Port, "--link", container.Link, "-v", pwd + ":/go/src/app", container.Image}
+				cmdArgs := prepareRunArgs(container, pwd)
 
 				for _, arg := range c.Args() {
 					cmdArgs = append(cmdArgs, arg)
