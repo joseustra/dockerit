@@ -103,7 +103,7 @@ func cleanContainer(name string) {
 }
 
 func prepareRunArgs(container *Container, pwd string) []string {
-	cmdArgs := []string{"run", "--name", container.Name, "-a", "stdout", "-a", "stderr", "-v", pwd + ":/go/src/app"}
+	cmdArgs := []string{"run", "--name", container.Name, "-a", "stdout", "-a", "stderr", "-v", pwd + ":" + container.Volume}
 	if len(container.Port) > 0 {
 		cmdArgs = append(cmdArgs, "-p", container.Port)
 	}
