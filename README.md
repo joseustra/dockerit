@@ -14,6 +14,7 @@ container:
   port: "3000:3000"
   link: "mongodb:mongo"
   image: "myimage"
+  volume: "/app"
 ```
 
 ## Status
